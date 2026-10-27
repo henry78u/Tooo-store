@@ -1,0 +1,6 @@
+{
+  "name": "TOOO STORE — Premium Contemporary Fashion",
+  "description": "Premium contemporary fashion storefront. Modern streetwear, elevated essentials, and refined accessories crafted to be worn and seen.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
