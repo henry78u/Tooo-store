@@ -1,9 +1,10 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, ArrowUpRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { HERO_IMAGE, STORY_IMAGE, OUTERWEAR_CAT_IMAGE, SETS_CAT_IMAGE } from '../data/products';
+import { useAdminStore } from '../store/useAdminStore';
 
-const COLLECTIONS = [
+const FALLBACK_COLLECTIONS = [
   {
     title: 'The Monochrome Drop',
     subtitle: 'High-contrast minimalist streetwear and 480 GSM knitwear',
@@ -31,6 +32,16 @@ const COLLECTIONS = [
 ];
 
 export const CollectionsPage: React.FC = () => {
+  const adminCollections = useAdminStore((s) => s.collections);
+  const collectionsToRender = adminCollections && adminCollections.length > 0
+    ? adminCollections.map((c) => ({
+        title: c.title,
+        subtitle: c.subtitle || c.title,
+        image: c.image || HERO_IMAGE,
+        piecesCount: `${c.piecesCount} Silhouettes`,
+        description: c.description,
+      }))
+    : FALLBACK_COLLECTIONS;
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 lg:py-16">
       {/* Header */}
@@ -47,7 +58,7 @@ export const CollectionsPage: React.FC = () => {
       </div>
 
       <div className="space-y-12">
-        {COLLECTIONS.map((col, idx) => (
+        {collectionsToRender.map((col, idx) => (
           <div
             key={col.title}
             className={`grid grid-cols-1 lg:grid-cols-12 gap-8 items-center bg-[#FAF8F5] border border-[#E9E7E3] overflow-hidden ${

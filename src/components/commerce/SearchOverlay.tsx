@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, X, ArrowRight, CornerDownLeft } from 'lucide-react';
 import { useStore, formatNaira } from '../../store/useStore';
-import { DEMO_PRODUCTS } from '../../data/products';
+import { useCommerceProducts } from '../../services/commerceService';
 
 export const SearchOverlay: React.FC = () => {
   const { isSearchOpen, closeSearch } = useStore();
+  const allProducts = useCommerceProducts();
   const [query, setQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -26,7 +27,7 @@ export const SearchOverlay: React.FC = () => {
 
   if (!isSearchOpen) return null;
 
-  const filteredProducts = DEMO_PRODUCTS.filter((product) => {
+  const filteredProducts = allProducts.filter((product) => {
     const matchesCategory =
       selectedCategory === 'All' || product.category === selectedCategory;
     const matchesQuery =

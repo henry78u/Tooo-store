@@ -14,12 +14,14 @@ import {
 import { useStore, formatNaira } from '../store/useStore';
 import { NIGERIAN_STATES } from '../data/products';
 import { OrderRecord, OrderAddress } from '../types';
+import { orderService } from '../services/orderService';
 
 export const CheckoutPage: React.FC = () => {
   const navigate = useNavigate();
-  const { cart, clearCart, promoCode, discountPercentage, addOrder, user } = useStore();
+  const { cart, promoCode, discountPercentage, user } = useStore();
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3 | 4>(1);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Step 1: Customer Info
   const [customerInfo, setCustomerInfo] = useState({
@@ -106,68 +108,28 @@ export const CheckoutPage: React.FC = () => {
     }
   };
 
-  const handlePlaceSimulatedOrder = () => {
-    const orderRef = `TOOO-${Math.floor(10000 + Math.random() * 90000)}`;
-    const now = new Date();
-    const formattedDate = now.toISOString().split('T')[0];
+  const handlePlaceSimulatedOrder = async () => {
+    setIsProcessing(true);
+    setFormError('');
 
-    const newOrder: OrderRecord = {
-      orderReference: orderRef,
-      date: formattedDate,
-      items: cart.map((i) => ({
-        productId: i.product.id,
-        productName: i.product.name,
-        size: i.selectedSize,
-        colour: i.selectedColour,
-        quantity: i.quantity,
-        price: i.unitPrice,
-        image: i.product.images[0],
-      })),
-      subtotal,
-      shippingFee,
-      discount: discountAmount,
-      total,
-      address: deliveryInfo,
+    const result = await orderService.placeOrder({
+      customerInfo,
+      deliveryAddress: deliveryInfo,
       paymentMethod: paymentMethod === 'card' ? 'Card (Demo)' : 'Bank Transfer (Demo)',
-      paymentStatus: 'Simulated Paid',
-      deliveryStatus: 'Confirmed',
-      timeline: [
-        {
-          status: 'Order Placed',
-          timestamp: `${formattedDate} · Just Now`,
-          completed: true,
-          description: `Order ${orderRef} recorded in client portal (Prototype Simulation)`,
-        },
-        {
-          status: 'Confirmed',
-          timestamp: `${formattedDate} · Verified`,
-          completed: true,
-          description: 'Payment verified and allocated to atelier cutting table',
-        },
-        {
-          status: 'Processing',
-          timestamp: 'Scheduled for tomorrow',
-          completed: false,
-          description: 'Garments steamed, wrapped in recycled tissue, and boxed',
-        },
-        {
-          status: 'Shipped',
-          timestamp: 'Pending Dispatch',
-          completed: false,
-          description: 'Courier dispatch handover with live SMS tracking',
-        },
-        {
-          status: 'Delivered',
-          timestamp: 'Pending Delivery',
-          completed: false,
-          description: 'Doorstep signature confirmation',
-        },
-      ],
-    };
+      items: cart,
+      promoCode,
+      discountPercentage,
+      shippingFee,
+    });
 
-    addOrder(newOrder);
-    clearCart();
-    navigate(`/track-order?ref=${orderRef}`);
+    setIsProcessing(false);
+
+    if (!result.success || !result.order) {
+      setFormError(result.error || 'Failed to process order. Please try again.');
+      return;
+    }
+
+    navigate(`/track-order?ref=${result.order.orderReference}`);
   };
 
   return (
@@ -498,10 +460,11 @@ export const CheckoutPage: React.FC = () => {
             ) : (
               <button
                 onClick={handlePlaceSimulatedOrder}
-                className="bg-[#8A4735] hover:bg-[#723929] text-white font-semibold text-xs uppercase tracking-wider py-3.5 px-8 transition-colors flex items-center gap-2 shadow-sm"
+                disabled={isProcessing}
+                className="bg-[#8A4735] hover:bg-[#723929] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-xs uppercase tracking-wider py-3.5 px-8 transition-colors flex items-center gap-2 shadow-sm"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Confirm & Place Order</span>
+                <CheckCircle2 className={`w-4 h-4 ${isProcessing ? 'animate-spin' : ''}`} />
+                <span>{isProcessing ? 'Allocating & Processing...' : 'Confirm & Place Order'}</span>
               </button>
             )}
           </div>

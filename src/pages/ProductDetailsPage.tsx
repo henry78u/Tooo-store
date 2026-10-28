@@ -19,13 +19,15 @@ import { DEMO_PRODUCTS } from '../data/products';
 import { ProductCard } from '../components/commerce/ProductCard';
 import { useStore, formatNaira } from '../store/useStore';
 import { Product } from '../types';
+import { useCommerceProducts } from '../services/commerceService';
 
 export const ProductDetailsPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
   const { addToCart, isInWishlist, toggleWishlist, setQuickViewProduct, addToast } = useStore();
+  const allProducts = useCommerceProducts();
 
-  const product = DEMO_PRODUCTS.find((p) => p.slug === slug);
+  const product = allProducts.find((p) => p.slug.toLowerCase().trim() === slug?.toLowerCase().trim());
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState<string>('');
@@ -46,7 +48,7 @@ export const ProductDetailsPage: React.FC = () => {
       setQuantity(1);
       setValidationError('');
     }
-  }, [product, slug]);
+  }, [product?.id, slug]);
 
   if (!product) {
     return (
@@ -59,13 +61,32 @@ export const ProductDetailsPage: React.FC = () => {
         </p>
         <Link
           to="/shop"
-          className="inline-block mt-6 bg-[#171717] text-white text-xs font-semibold py-3 px-6"
+          className="inline-block mt-6 bg-[#171717] text-white text-xs font-semibold py-3 px-6 uppercase tracking-wider"
         >
           Return to Catalogue
         </Link>
       </div>
     );
   }
+
+  // Active Variant and stock calculations
+  const activeVariant = selectedSize && selectedColour
+    ? product.variants?.find(
+        (v) =>
+          v.size === selectedSize &&
+          v.colour.toLowerCase().trim() === selectedColour.toLowerCase().trim()
+      )
+    : undefined;
+
+  const currentAvailableStock = activeVariant
+    ? activeVariant.stock
+    : selectedSize
+    ? 0
+    : product.stock;
+
+  const isCurrentSelectionSoldOut = Boolean(
+    selectedSize && selectedColour && currentAvailableStock <= 0
+  );
 
   const isWishlisted = isInWishlist(product.id);
 
@@ -76,6 +97,10 @@ export const ProductDetailsPage: React.FC = () => {
     }
     if (!selectedColour) {
       setValidationError('Please select a colour.');
+      return;
+    }
+    if (currentAvailableStock <= 0) {
+      setValidationError('This size and colour variant is currently sold out.');
       return;
     }
     setValidationError('');
@@ -94,9 +119,13 @@ export const ProductDetailsPage: React.FC = () => {
   };
 
   // Related products from same category or collection
-  const relatedProducts = DEMO_PRODUCTS.filter(
-    (p) => p.id !== product.id && (p.category === product.category || p.collection === product.collection)
-  ).slice(0, 4);
+  const relatedProducts = allProducts
+    .filter(
+      (p) =>
+        p.id !== product.id &&
+        (p.category === product.category || p.collection === product.collection)
+    )
+    .slice(0, 4);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-14">
@@ -245,24 +274,56 @@ export const ProductDetailsPage: React.FC = () => {
             <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
               {product.availableSizes.map((size) => {
                 const isSelected = selectedSize === size;
+                const sizeVariant = product.variants?.find(
+                  (v) =>
+                    v.size === size &&
+                    v.colour.toLowerCase().trim() === selectedColour.toLowerCase().trim()
+                );
+                const isSizeSoldOut = sizeVariant !== undefined ? sizeVariant.stock <= 0 : false;
+
                 return (
                   <button
                     key={size}
                     onClick={() => {
                       setSelectedSize(size);
                       setValidationError('');
+                      if (sizeVariant && sizeVariant.stock < quantity) {
+                        setQuantity(Math.max(1, sizeVariant.stock));
+                      }
                     }}
-                    className={`py-2.5 text-xs font-semibold uppercase transition-all border ${
-                      isSelected
+                    className={`py-2.5 text-xs font-semibold uppercase transition-all border relative ${
+                      isSizeSoldOut
+                        ? 'bg-neutral-100 text-neutral-400 border-neutral-200 line-through'
+                        : isSelected
                         ? 'bg-[#171717] text-white border-[#171717]'
                         : 'bg-white text-neutral-800 border-[#E9E7E3] hover:border-neutral-900'
                     }`}
+                    title={isSizeSoldOut ? `${size} is currently sold out in ${selectedColour}` : `${size} in stock`}
                   >
                     {size}
                   </button>
                 );
               })}
             </div>
+
+            {/* Stock Availability Indicator */}
+            {selectedSize && selectedColour && (
+              <div className="mt-2 text-xs">
+                {isCurrentSelectionSoldOut ? (
+                  <p className="text-rose-700 bg-rose-50 p-2 border border-rose-200 font-medium">
+                    This variant ({selectedSize} · {selectedColour}) is currently sold out.
+                  </p>
+                ) : currentAvailableStock <= 3 ? (
+                  <p className="text-amber-800 bg-amber-50 p-2 border border-amber-200 font-medium">
+                    Limited atelier availability: Only {currentAvailableStock} unit{currentAvailableStock > 1 ? 's' : ''} remaining in stock.
+                  </p>
+                ) : (
+                  <p className="text-emerald-700 bg-emerald-50/60 p-2 border border-emerald-200 text-[11px]">
+                    ✓ In stock and ready for immediate dispatch ({currentAvailableStock} units available)
+                  </p>
+                )}
+              </div>
+            )}
 
             {validationError && (
               <p className="mt-2 text-xs text-rose-600 bg-rose-50 p-2 border border-rose-200">
@@ -277,17 +338,24 @@ export const ProductDetailsPage: React.FC = () => {
               <div className="flex items-center border border-[#E9E7E3] bg-white h-12 px-2">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="p-1.5 text-neutral-500 hover:text-neutral-900"
+                  disabled={isCurrentSelectionSoldOut || quantity <= 1}
+                  className="p-1.5 text-neutral-500 hover:text-neutral-900 disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label="Decrease quantity"
                 >
                   <Minus className="w-3.5 h-3.5" />
                 </button>
                 <span className="px-4 text-xs font-semibold tabular-nums text-neutral-900">
-                  {quantity}
+                  {isCurrentSelectionSoldOut ? 0 : quantity}
                 </span>
                 <button
-                  onClick={() => setQuantity(quantity + 1)}
-                  className="p-1.5 text-neutral-500 hover:text-neutral-900"
+                  onClick={() => {
+                    const maxAllowed = currentAvailableStock > 0 ? currentAvailableStock : 1;
+                    if (quantity < maxAllowed) {
+                      setQuantity(quantity + 1);
+                    }
+                  }}
+                  disabled={isCurrentSelectionSoldOut || (currentAvailableStock > 0 && quantity >= currentAvailableStock)}
+                  className="p-1.5 text-neutral-500 hover:text-neutral-900 disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label="Increase quantity"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -296,12 +364,19 @@ export const ProductDetailsPage: React.FC = () => {
 
               <button
                 onClick={handleAddToCart}
-                className="flex-1 bg-[#171717] hover:bg-neutral-800 text-white font-semibold text-xs uppercase tracking-wider h-12 px-6 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                disabled={isCurrentSelectionSoldOut}
+                className={`flex-1 font-semibold text-xs uppercase tracking-wider h-12 px-6 transition-colors flex items-center justify-center gap-2 shadow-sm ${
+                  isCurrentSelectionSoldOut
+                    ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                    : 'bg-[#171717] hover:bg-neutral-800 text-white'
+                }`}
               >
-                <span>Add to Bag</span>
-                <span className="tabular-nums font-normal">
-                  ({formatNaira(product.price * quantity)})
-                </span>
+                <span>{isCurrentSelectionSoldOut ? 'Sold Out' : 'Add to Bag'}</span>
+                {!isCurrentSelectionSoldOut && (
+                  <span className="tabular-nums font-normal">
+                    ({formatNaira(product.price * quantity)})
+                  </span>
+                )}
               </button>
 
               <button

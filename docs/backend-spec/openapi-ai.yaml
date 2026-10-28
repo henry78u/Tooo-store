@@ -1,0 +1,241 @@
+openapi: 3.1.0
+info:
+  title: TOOO STORE — AI Engineering Service API
+  version: 1.0.0
+  description: Stateless AI engineering microservice powering natural language semantic search, complete-the-look style recommendations, and the interactive styling concierge agent for TOOO STORE. Strictly read-only against commerce database tables.
+  contact:
+    name: TOOO STORE AI Engineering
+    email: ai-team@tooostore.example
+
+servers:
+  - url: /ai/v1
+    description: Python FastAPI Microservice Endpoint
+
+paths:
+  /search:
+    post:
+      summary: Natural language hybrid semantic product search
+      description: Computes text embeddings, queries pgvector cosine similarity, and fuses results with PostgreSQL trigram keyword search via Reciprocal Rank Fusion (RRF). Grounded in active catalog data.
+      tags: [Semantic Search]
+      operationId: searchCatalog
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AISearchRequest'
+      responses:
+        '200':
+          description: Ranked product search results with match highlights
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AISearchResponse'
+        '400':
+          description: Invalid search query or filter parameters
+        '503':
+          description: Model or embedding provider temporarily unavailable (triggers lexical fallback)
+
+  /recommendations:
+    post:
+      summary: Contextual style and capsule recommendations
+      description: Computes cross-category garment pairings (Complete the Look) and stylistic coordinate recommendations based on fabric composition and visual harmony.
+      tags: [Recommendations]
+      operationId: getRecommendations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendationRequest'
+      responses:
+        '200':
+          description: List of recommended silhouette pairs with styling rationale
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResponse'
+
+  /chat/agent:
+    post:
+      summary: Interactive styling concierge agent
+      description: Conversational styling agent executing sandboxed read-only tools to check sizes, explain fabric care, and assemble bags. Supports streaming Server-Sent Events (SSE).
+      tags: [Styling Agent]
+      operationId: chatWithStylingAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentChatRequest'
+      responses:
+        '200':
+          description: Agent response (JSON or SSE event stream)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentChatResponse'
+            text/event-stream:
+              schema:
+                type: string
+                description: Real-time SSE token stream with thinking events
+
+  /healthz:
+    get:
+      summary: Microservice liveness probe
+      tags: [System]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "UP" }
+
+  /readyz:
+    get:
+      summary: Microservice readiness probe
+      tags: [System]
+      responses:
+        '200':
+          description: Read-only database and model inference ready
+        '503':
+          description: Service not ready
+
+components:
+  schemas:
+    AISearchRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 2
+          maxLength: 200
+          example: "oversized wool trench coat"
+        filters:
+          type: object
+          properties:
+            category: { type: string, example: "Outerwear" }
+            collection: { type: string, example: "Architectural Tailoring" }
+            minPrice: { type: integer, example: 50000 }
+            maxPrice: { type: integer, example: 150000 }
+            inStockOnly: { type: boolean, default: true }
+        limit:
+          type: integer
+          default: 8
+          minimum: 1
+          maximum: 24
+
+    AISearchResponse:
+      type: object
+      required: [success, data]
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          required: [query, products]
+          properties:
+            query: { type: string }
+            retrievalMethod: { type: string, enum: [HYBRID_RRF, LEXICAL_FALLBACK] }
+            products:
+              type: array
+              items:
+                $ref: '#/components/schemas/ScoredProduct'
+        meta:
+          type: object
+          properties:
+            latencyMs: { type: integer, example: 124 }
+            totalMatches: { type: integer, example: 3 }
+
+    ScoredProduct:
+      type: object
+      required: [id, slug, name, price, category, image]
+      properties:
+        id: { type: string, example: "prod-01" }
+        slug: { type: string, example: "architectural-wool-overcoat" }
+        name: { type: string, example: "Architectural Wool Overcoat" }
+        price: { type: integer, example: 115000 }
+        category: { type: string, example: "Outerwear" }
+        collection: { type: string, example: "Architectural Tailoring" }
+        image: { type: string, format: uri }
+        relevanceScore: { type: number, format: float, example: 0.94 }
+        matchHighlights:
+          type: array
+          items: { type: string }
+        availableColours:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              hex: { type: string }
+        availableSizes:
+          type: array
+          items: { type: string }
+
+    RecommendationRequest:
+      type: object
+      required: [targetProductId, strategy]
+      properties:
+        targetProductId: { type: string, example: "prod-01" }
+        strategy:
+          type: string
+          enum: [COMPLETE_THE_LOOK, SIMILAR_SILHOUETTES, CAPSULE_COORDINATE]
+        limit:
+          type: integer
+          default: 4
+          maximum: 8
+
+    RecommendationResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            strategy: { type: string }
+            recommendations:
+              type: array
+              items:
+                type: object
+                properties:
+                  id: { type: string }
+                  slug: { type: string }
+                  name: { type: string }
+                  price: { type: integer }
+                  category: { type: string }
+                  image: { type: string }
+                  stylingRationale: { type: string }
+
+    AgentChatRequest:
+      type: object
+      required: [conversationId, message]
+      properties:
+        conversationId: { type: string, example: "conv_884920" }
+        message: { type: string, minLength: 1, maxLength: 1000 }
+        currentContext:
+          type: object
+          properties:
+            activePage: { type: string }
+            activeProductId: { type: string }
+
+    AgentChatResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: object
+          properties:
+            conversationId: { type: string }
+            reply: { type: string }
+            suggestedActions:
+              type: array
+              items:
+                type: object
+                properties:
+                  type: { type: string, example: "VIEW_PRODUCT" }
+                  slug: { type: string }
+                  label: { type: string }

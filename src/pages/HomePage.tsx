@@ -2,18 +2,30 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowUpRight, ShieldCheck, RefreshCw, Truck } from 'lucide-react';
 import { ProductCard } from '../components/commerce/ProductCard';
-import { DEMO_PRODUCTS, CATEGORIES_DATA, EDITORIAL_GALLERY, HERO_IMAGE, STORY_IMAGE } from '../data/products';
+import { CATEGORIES_DATA, EDITORIAL_GALLERY, HERO_IMAGE, STORY_IMAGE } from '../data/products';
 import { useStore } from '../store/useStore';
+import { useAdminStore } from '../store/useAdminStore';
+import { useCommerceProducts } from '../services/commerceService';
 
 export const HomePage: React.FC = () => {
   const navigate = useNavigate();
   const { setQuickViewProduct } = useStore();
+  const products = useCommerceProducts();
+  const homepageSections = useAdminStore((s) => s.homepageSections);
+
+  const heroSec = homepageSections.find((s) => s.id === 'sec-hero');
+  const campaignSec = homepageSections.find((s) => s.id === 'sec-campaign');
+  const storySec = homepageSections.find((s) => s.id === 'sec-story');
+  const categoriesSec = homepageSections.find((s) => s.id === 'sec-categories');
+  const newArrivalsSec = homepageSections.find((s) => s.id === 'sec-new-arrivals');
+  const bestsellersSec = homepageSections.find((s) => s.id === 'sec-bestsellers');
+
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
   const addToast = useStore((s) => s.addToast);
 
-  const newArrivals = DEMO_PRODUCTS.filter((p) => p.isNew).slice(0, 4);
-  const bestSellers = DEMO_PRODUCTS.filter((p) => p.isBestSeller).slice(0, 4);
+  const newArrivals = products.filter((p) => p.isNew).slice(0, 4);
+  const bestSellers = products.filter((p) => p.isBestSeller).slice(0, 4);
 
   const handleNewsletterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,49 +42,51 @@ export const HomePage: React.FC = () => {
   return (
     <div className="flex flex-col min-h-screen">
       {/* SECTION 1: Full-Width Campaign Hero */}
-      <section className="relative w-full h-[88vh] min-h-[580px] max-h-[920px] bg-[#171717] overflow-hidden flex items-end">
-        {/* Background Image */}
-        <div className="absolute inset-0">
-          <img
-            src={HERO_IMAGE}
-            alt="TOOO STORE Autumn/Winter Editorial Campaign"
-            referrerPolicy="no-referrer"
-            className="w-full h-full object-cover object-top filter brightness-[0.88] contrast-[1.04]"
-          />
-          {/* Measured contrast scrim gradient */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
-        </div>
+      {heroSec?.enabled !== false && (
+        <section className="relative w-full h-[88vh] min-h-[580px] max-h-[920px] bg-[#171717] overflow-hidden flex items-end">
+          {/* Background Image */}
+          <div className="absolute inset-0">
+            <img
+              src={heroSec?.image || HERO_IMAGE}
+              alt="TOOO STORE Autumn/Winter Editorial Campaign"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover object-top filter brightness-[0.88] contrast-[1.04]"
+            />
+            {/* Measured contrast scrim gradient */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/10" />
+          </div>
 
-        {/* Hero Content Overlay */}
-        <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-14 sm:pb-20">
-          <div className="max-w-2xl space-y-4">
-            <span className="text-xs uppercase tracking-[0.25em] text-[#D8D0C5] font-semibold block">
-              TOOO. Collection · Atelier Edit
-            </span>
-            <h1 className="font-display font-extrabold text-4xl sm:text-6xl lg:text-7xl text-white tracking-tight leading-[1.04] text-balance">
-              STYLE WITHOUT LIMITS.
-            </h1>
-            <p className="text-sm sm:text-base text-neutral-200 font-normal leading-relaxed max-w-lg">
-              Discover pieces that define your everyday expression. Engineered silhouettes crafted to be worn and seen.
-            </p>
+          {/* Hero Content Overlay */}
+          <div className="relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-14 sm:pb-20">
+            <div className="max-w-2xl space-y-4">
+              <span className="text-xs uppercase tracking-[0.25em] text-[#D8D0C5] font-semibold block">
+                {heroSec?.subheadline || 'TOOO. Collection · Atelier Edit'}
+              </span>
+              <h1 className="font-display font-extrabold text-4xl sm:text-6xl lg:text-7xl text-white tracking-tight leading-[1.04] text-balance">
+                {heroSec?.headline || 'STYLE WITHOUT LIMITS.'}
+              </h1>
+              <p className="text-sm sm:text-base text-neutral-200 font-normal leading-relaxed max-w-lg">
+                Discover pieces that define your everyday expression. Engineered silhouettes crafted to be worn and seen.
+              </p>
 
-            <div className="pt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <Link
-                to="/shop"
-                className="bg-white text-[#171717] hover:bg-[#F6F3ED] text-xs font-semibold uppercase tracking-wider py-4 px-8 text-center transition-all duration-200 shadow-lg"
-              >
-                Shop the Collection
-              </Link>
-              <Link
-                to="/shop?sort=newest"
-                className="border border-white/60 hover:border-white text-white bg-black/20 hover:bg-black/40 backdrop-blur-xs text-xs font-semibold uppercase tracking-wider py-4 px-8 text-center transition-all duration-200"
-              >
-                Explore New Arrivals
-              </Link>
+              <div className="pt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <Link
+                  to={heroSec?.ctaLink || '/shop'}
+                  className="bg-white text-[#171717] hover:bg-[#F6F3ED] text-xs font-semibold uppercase tracking-wider py-4 px-8 text-center transition-all duration-200 shadow-lg"
+                >
+                  {heroSec?.ctaText || 'Shop the Collection'}
+                </Link>
+                <Link
+                  to="/shop?sort=newest"
+                  className="border border-white/60 hover:border-white text-white bg-black/20 hover:bg-black/40 backdrop-blur-xs text-xs font-semibold uppercase tracking-wider py-4 px-8 text-center transition-all duration-200"
+                >
+                  Explore New Arrivals
+                </Link>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Trust & Guarantee Strip */}
       <section className="bg-[#F6F3ED] border-b border-[#E9E7E3] py-4">
@@ -182,118 +196,124 @@ export const HomePage: React.FC = () => {
       </section>
 
       {/* SECTION 4: Editorial Campaign Banner */}
-      <section className="relative w-full py-24 sm:py-32 bg-[#171717] text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-40">
-          <img
-            src={STORY_IMAGE}
-            alt="Editorial Campaign"
-            referrerPolicy="no-referrer"
-            className="w-full h-full object-cover object-center"
-          />
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-black/40" />
-
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-xl space-y-4">
-            <span className="text-xs font-semibold uppercase tracking-[0.25em] text-[#8A4735]">
-              Volume 01 · Contemporary Expression
-            </span>
-            <h2 className="font-display font-extrabold text-3xl sm:text-5xl tracking-tight text-white leading-tight">
-              WEAR YOUR CONFIDENCE.
-            </h2>
-            <p className="text-sm sm:text-base text-neutral-300 font-light leading-relaxed">
-              Everyday essentials. Elevated expression. Designed with architectural restraint to seamlessly adapt between high occasions and daily urban motion.
-            </p>
-            <div className="pt-2">
-              <Link
-                to="/collections"
-                className="inline-flex items-center gap-2 bg-white text-[#171717] hover:bg-[#F6F3ED] text-xs font-semibold uppercase tracking-wider py-3.5 px-7 transition-colors"
-              >
-                <span>Discover the Collection</span>
-                <ArrowRight className="w-4 h-4" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 5: Bestsellers */}
-      <section className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-        <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between mb-10 gap-4">
-          <div>
-            <span className="text-[11px] font-semibold text-[#8A4735] uppercase tracking-[0.2em] block mb-1">
-              Client Favorites
-            </span>
-            <h2 className="font-display font-bold text-2xl sm:text-3xl text-[#171717] tracking-tight">
-              Bestselling Silhouettes
-            </h2>
-          </div>
-          <Link
-            to="/shop"
-            className="text-xs font-semibold text-neutral-800 hover:text-[#8A4735] flex items-center gap-1 transition-colors group"
-          >
-            <span>Explore All Pieces</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
-          {bestSellers.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              onQuickAdd={() => setQuickViewProduct(product)}
+      {campaignSec?.enabled !== false && (
+        <section className="relative w-full py-24 sm:py-32 bg-[#171717] text-white overflow-hidden">
+          <div className="absolute inset-0 opacity-40">
+            <img
+              src={campaignSec?.image || STORY_IMAGE}
+              alt="Editorial Campaign"
+              referrerPolicy="no-referrer"
+              className="w-full h-full object-cover object-center"
             />
-          ))}
-        </div>
-      </section>
+          </div>
+          <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/60 to-black/40" />
 
-      {/* SECTION 6: Brand Story (Split Screen) */}
-      <section className="bg-[#F6F3ED] border-y border-[#E9E7E3] py-16 sm:py-24">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            {/* Left Image */}
-            <div className="lg:col-span-6">
-              <div className="aspect-[4/5] bg-white overflow-hidden shadow-sm border border-[#E9E7E3]">
-                <img
-                  src={STORY_IMAGE}
-                  alt="TOOO Atelier Craftsman"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-
-            {/* Right Story Content */}
-            <div className="lg:col-span-6 space-y-5 lg:pl-6">
-              <span className="text-[11px] font-bold text-[#8A4735] uppercase tracking-[0.25em] block">
-                The TOOO Story
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-xl space-y-4">
+              <span className="text-xs font-semibold uppercase tracking-[0.25em] text-[#8A4735]">
+                {campaignSec?.subheadline || 'Volume 01 · Contemporary Expression'}
               </span>
-              <h2 className="font-display font-extrabold text-3xl sm:text-4xl text-[#171717] tracking-tight">
-                More Than What You Wear.
+              <h2 className="font-display font-extrabold text-3xl sm:text-5xl tracking-tight text-white leading-tight">
+                {campaignSec?.headline || 'WEAR YOUR CONFIDENCE.'}
               </h2>
-              <div className="space-y-4 text-sm text-neutral-700 leading-relaxed">
-                <p>
-                  TOOO STORE was established on the principle that clothing is an architecture of self-possession. Founded with deep contemporary roots, our garments bridge relaxed comfort with strict tailoring discipline.
-                </p>
-                <p>
-                  We prioritize heavy-gauge natural fibers, custom-milled loopback cotton, and double-faced wool blends engineered to hold their shape through countless wears. Every seam, cuff, and drop shoulder is drawn with intentional purpose.
-                </p>
-              </div>
-
-              <div className="pt-3">
+              <p className="text-sm sm:text-base text-neutral-300 font-light leading-relaxed">
+                Everyday essentials. Elevated expression. Designed with architectural restraint to seamlessly adapt between high occasions and daily urban motion.
+              </p>
+              <div className="pt-2">
                 <Link
-                  to="/about"
-                  className="inline-flex items-center gap-2 border border-[#171717] text-[#171717] hover:bg-[#171717] hover:text-white px-6 py-3 text-xs font-semibold uppercase tracking-wider transition-colors"
+                  to={campaignSec?.ctaLink || '/collections'}
+                  className="inline-flex items-center gap-2 bg-white text-[#171717] hover:bg-[#F6F3ED] text-xs font-semibold uppercase tracking-wider py-3.5 px-7 transition-colors"
                 >
-                  <span>Discover Our Story</span>
+                  <span>{campaignSec?.ctaText || 'Discover the Collection'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
+
+      {/* SECTION 5: Bestsellers */}
+      {bestsellersSec?.enabled !== false && (
+        <section className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
+          <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between mb-10 gap-4">
+            <div>
+              <span className="text-[11px] font-semibold text-[#8A4735] uppercase tracking-[0.2em] block mb-1">
+                {bestsellersSec?.subheadline || 'Client Favorites'}
+              </span>
+              <h2 className="font-display font-bold text-2xl sm:text-3xl text-[#171717] tracking-tight">
+                {bestsellersSec?.headline || 'Bestselling Silhouettes'}
+              </h2>
+            </div>
+            <Link
+              to="/shop"
+              className="text-xs font-semibold text-neutral-800 hover:text-[#8A4735] flex items-center gap-1 transition-colors group"
+            >
+              <span>Explore All Pieces</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+            {bestSellers.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onQuickAdd={() => setQuickViewProduct(product)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* SECTION 6: Brand Story (Split Screen) */}
+      {storySec?.enabled !== false && (
+        <section className="bg-[#F6F3ED] border-y border-[#E9E7E3] py-16 sm:py-24">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+              {/* Left Image */}
+              <div className="lg:col-span-6">
+                <div className="aspect-[4/5] bg-white overflow-hidden shadow-sm border border-[#E9E7E3]">
+                  <img
+                    src={storySec?.image || STORY_IMAGE}
+                    alt="TOOO Atelier Craftsman"
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
+
+              {/* Right Story Content */}
+              <div className="lg:col-span-6 space-y-5 lg:pl-6">
+                <span className="text-[11px] font-bold text-[#8A4735] uppercase tracking-[0.25em] block">
+                  {storySec?.subheadline || 'The TOOO Story'}
+                </span>
+                <h2 className="font-display font-extrabold text-3xl sm:text-4xl text-[#171717] tracking-tight">
+                  {storySec?.headline || 'More Than What You Wear.'}
+                </h2>
+                <div className="space-y-4 text-sm text-neutral-700 leading-relaxed">
+                  <p>
+                    TOOO STORE was established on the principle that clothing is an architecture of self-possession. Founded with deep contemporary roots, our garments bridge relaxed comfort with strict tailoring discipline.
+                  </p>
+                  <p>
+                    We prioritize heavy-gauge natural fibers, custom-milled loopback cotton, and double-faced wool blends engineered to hold their shape through countless wears. Every seam, cuff, and drop shoulder is drawn with intentional purpose.
+                  </p>
+                </div>
+
+                <div className="pt-3">
+                  <Link
+                    to={storySec?.ctaLink || '/about'}
+                    className="inline-flex items-center gap-2 border border-[#171717] text-[#171717] hover:bg-[#171717] hover:text-white px-6 py-3 text-xs font-semibold uppercase tracking-wider transition-colors"
+                  >
+                    <span>{storySec?.ctaText || 'Discover Our Story'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* SECTION 7: Instagram-Inspired Lookbook Gallery */}
       <section className="py-16 sm:py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">

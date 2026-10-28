@@ -21,6 +21,22 @@ export const QuickAddModal: React.FC = () => {
 
   if (!quickViewProduct) return null;
 
+  const currentVariant = selectedSize && selectedColour
+    ? quickViewProduct.variants?.find(
+        (v) =>
+          v.size === selectedSize &&
+          v.colour.toLowerCase().trim() === selectedColour.toLowerCase().trim()
+      )
+    : undefined;
+
+  const currentAvailableStock = currentVariant !== undefined
+    ? currentVariant.stock
+    : selectedSize
+    ? 0
+    : quickViewProduct.stock;
+
+  const isSoldOut = Boolean(selectedSize && selectedColour && currentAvailableStock <= 0);
+
   const handleAdd = () => {
     if (!selectedSize) {
       setErrorMsg('Please select a size before adding to your bag.');
@@ -28,6 +44,10 @@ export const QuickAddModal: React.FC = () => {
     }
     if (!selectedColour) {
       setErrorMsg('Please select a colour.');
+      return;
+    }
+    if (currentAvailableStock <= 0) {
+      setErrorMsg('This size and colour combination is sold out.');
       return;
     }
     setErrorMsg('');
@@ -123,6 +143,13 @@ export const QuickAddModal: React.FC = () => {
               <div className="grid grid-cols-4 gap-1.5">
                 {quickViewProduct.availableSizes.map((size) => {
                   const isSelected = selectedSize === size;
+                  const sizeVar = quickViewProduct.variants?.find(
+                    (v) =>
+                      v.size === size &&
+                      v.colour.toLowerCase().trim() === selectedColour.toLowerCase().trim()
+                  );
+                  const isSizeSoldOut = sizeVar !== undefined ? sizeVar.stock <= 0 : false;
+
                   return (
                     <button
                       key={size}
@@ -131,10 +158,13 @@ export const QuickAddModal: React.FC = () => {
                         setErrorMsg('');
                       }}
                       className={`py-2 text-xs font-semibold uppercase transition-colors border ${
-                        isSelected
+                        isSizeSoldOut
+                          ? 'bg-neutral-100 text-neutral-400 border-neutral-200 line-through'
+                          : isSelected
                           ? 'bg-[#171717] text-white border-[#171717]'
                           : 'bg-white text-neutral-800 border-[#E9E7E3] hover:border-neutral-800'
                       }`}
+                      title={isSizeSoldOut ? `${size} sold out` : size}
                     >
                       {size}
                     </button>
@@ -142,6 +172,19 @@ export const QuickAddModal: React.FC = () => {
                 })}
               </div>
             </div>
+
+            {/* Stock indicator */}
+            {selectedSize && selectedColour && (
+              <div className="text-xs">
+                {isSoldOut ? (
+                  <span className="text-rose-700 font-medium">Sold Out</span>
+                ) : currentAvailableStock <= 3 ? (
+                  <span className="text-amber-800 font-medium">Only {currentAvailableStock} left</span>
+                ) : (
+                  <span className="text-emerald-700 font-medium">In Stock</span>
+                )}
+              </div>
+            )}
 
             {/* Validation Message */}
             {errorMsg && (
@@ -153,10 +196,15 @@ export const QuickAddModal: React.FC = () => {
             {/* CTA Button */}
             <button
               onClick={handleAdd}
-              className="w-full bg-[#171717] hover:bg-neutral-800 text-white font-medium py-3 px-4 text-xs transition-colors flex items-center justify-center gap-2 shadow-sm"
+              disabled={isSoldOut}
+              className={`w-full font-medium py-3 px-4 text-xs transition-colors flex items-center justify-center gap-2 shadow-sm ${
+                isSoldOut
+                  ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                  : 'bg-[#171717] hover:bg-neutral-800 text-white'
+              }`}
             >
-              <span>Add to Bag</span>
-              <ArrowRight className="w-4 h-4" />
+              <span>{isSoldOut ? 'Sold Out' : 'Add to Bag'}</span>
+              {!isSoldOut && <ArrowRight className="w-4 h-4" />}
             </button>
           </div>
         </div>

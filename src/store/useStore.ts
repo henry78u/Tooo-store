@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { CartItem, Product, OrderRecord, OrderStatus } from '../types';
+import { useAdminStore } from './useAdminStore';
 
 export interface ToastMessage {
   id: string;
@@ -161,14 +162,47 @@ export const useStore = create<StoreState>()(
       closeCart: () => set({ isCartOpen: false }),
 
       addToCart: (product, size, colour, quantity = 1) => {
+        // Check available stock from adminStore or product variants
+        let availableStock = 999;
+        const adminProduct = useAdminStore.getState().products.find((p) => p.id === product.id);
+        const targetProduct = adminProduct || product;
+        const variant = targetProduct.variants?.find((v) => v.size === size && v.colour === colour);
+        if (variant) {
+          availableStock = variant.stock;
+        } else if (targetProduct.stock !== undefined) {
+          availableStock = targetProduct.stock;
+        }
+
+        if (availableStock <= 0) {
+          get().addToast({
+            title: 'Out of Stock',
+            description: `${product.name} (${size} · ${colour}) is currently out of stock`,
+            type: 'info',
+          });
+          return;
+        }
+
         const cartItemId = `${product.id}-${size}-${colour}`;
         const currentCart = get().cart;
         const existingItem = currentCart.find((i) => i.id === cartItemId);
+        const currentQty = existingItem ? existingItem.quantity : 0;
+        const targetQty = currentQty + quantity;
+
+        if (currentQty >= availableStock) {
+          get().addToast({
+            title: 'Maximum Stock Reached',
+            description: `Only ${availableStock} unit(s) available in this size & colour`,
+            type: 'info',
+          });
+          return;
+        }
+
+        const finalQty = Math.min(targetQty, availableStock);
 
         let updatedCart: CartItem[];
         if (existingItem) {
           updatedCart = currentCart.map((i) =>
-            i.id === cartItemId ? { ...i, quantity: i.quantity + quantity } : i
+            i.id === cartItemId ? { ...i, quantity: finalQty } : i
           );
         } else {
           updatedCart = [
@@ -178,7 +212,7 @@ export const useStore = create<StoreState>()(
               product,
               selectedSize: size,
               selectedColour: colour,
-              quantity,
+              quantity: Math.min(quantity, availableStock),
               unitPrice: product.price,
             },
           ];
@@ -198,9 +232,33 @@ export const useStore = create<StoreState>()(
           get().removeFromCart(cartItemId);
           return;
         }
+        const item = get().cart.find((i) => i.id === cartItemId);
+        if (!item) return;
+
+        let availableStock = 999;
+        const adminProduct = useAdminStore.getState().products.find((p) => p.id === item.product.id);
+        const targetProduct = adminProduct || item.product;
+        const variant = targetProduct.variants?.find(
+          (v) => v.size === item.selectedSize && v.colour === item.selectedColour
+        );
+        if (variant) {
+          availableStock = variant.stock;
+        } else if (targetProduct.stock !== undefined) {
+          availableStock = targetProduct.stock;
+        }
+
+        const clampedQuantity = Math.min(newQuantity, availableStock);
+        if (newQuantity > availableStock) {
+          get().addToast({
+            title: 'Stock Limit Reached',
+            description: `Only ${availableStock} unit(s) available in this variant`,
+            type: 'info',
+          });
+        }
+
         set({
-          cart: get().cart.map((item) =>
-            item.id === cartItemId ? { ...item, quantity: newQuantity } : item
+          cart: get().cart.map((i) =>
+            i.id === cartItemId ? { ...i, quantity: clampedQuantity } : i
           ),
         });
       },
@@ -225,6 +283,54 @@ export const useStore = create<StoreState>()(
       discountPercentage: 0,
       applyPromoCode: (code: string) => {
         const clean = code.trim().toUpperCase();
+        if (!clean) {
+          return { success: false, message: 'Please enter a promo code' };
+        }
+
+        // Check dynamic discounts in admin store
+        const adminDiscounts = useAdminStore.getState().discounts || [];
+        const found = adminDiscounts.find((d) => d.code.toUpperCase() === clean);
+
+        if (found) {
+          if (!found.isActive) {
+            return { success: false, message: `Promo code "${clean}" is no longer active` };
+          }
+          if (found.expiryDate) {
+            const exp = new Date(found.expiryDate).getTime();
+            if (!isNaN(exp) && exp < Date.now()) {
+              return { success: false, message: `Promo code "${clean}" has expired` };
+            }
+          }
+          if (found.usageLimit && found.usageCount >= found.usageLimit) {
+            return { success: false, message: `Promo code "${clean}" has reached its maximum usage limit` };
+          }
+
+          const cartSubtotal = get().cart.reduce(
+            (sum, item) => sum + item.unitPrice * item.quantity,
+            0
+          );
+          if (found.minOrderValue && cartSubtotal < found.minOrderValue) {
+            return {
+              success: false,
+              message: `Order must be at least ${formatNaira(found.minOrderValue)} to use this code`,
+            };
+          }
+
+          const percentage =
+            found.type === 'percentage'
+              ? found.value
+              : Math.min(100, Math.round((found.value / (cartSubtotal || 1)) * 100));
+
+          set({ promoCode: clean, discountPercentage: percentage });
+          get().addToast({
+            title: 'Promo Applied',
+            description: `${percentage}% discount code applied to your order`,
+            type: 'accent',
+          });
+          return { success: true, message: `${percentage}% discount code applied` };
+        }
+
+        // Default / Built-in codes
         if (clean === 'TOOO10') {
           set({ promoCode: clean, discountPercentage: 10 });
           get().addToast({

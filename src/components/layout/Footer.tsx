@@ -210,6 +210,11 @@ export const Footer: React.FC = () => {
               <li>
                 <span className="text-neutral-500">support@tooostore.example</span>
               </li>
+              <li>
+                <Link to="/admin" className="text-neutral-500 hover:text-white transition-colors">
+                  Staff Admin Console
+                </Link>
+              </li>
             </ul>
           </div>
         </div>

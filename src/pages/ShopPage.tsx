@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SlidersHorizontal, X, RotateCcw, Check } from 'lucide-react';
-import { DEMO_PRODUCTS } from '../data/products';
 import { ProductCard } from '../components/commerce/ProductCard';
 import { FilterState, ProductCategory } from '../types';
 import { useStore, formatNaira } from '../store/useStore';
+import { useCommerceProducts } from '../services/commerceService';
 
 const CATEGORIES: ProductCategory[] = ['Outerwear', 'Sets', 'Tops', 'Bottoms', 'Accessories'];
 const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'ONE SIZE'];
@@ -20,6 +20,7 @@ const COLOURS = [
 export const ShopPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { setQuickViewProduct } = useStore();
+  const allProducts = useCommerceProducts();
 
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
@@ -61,7 +62,7 @@ export const ShopPage: React.FC = () => {
 
   // Filter and Sort Logic
   const filteredProducts = useMemo(() => {
-    return DEMO_PRODUCTS.filter((product) => {
+    return allProducts.filter((product) => {
       // Category filter
       if (filters.category !== 'All' && product.category !== filters.category) {
         return false;

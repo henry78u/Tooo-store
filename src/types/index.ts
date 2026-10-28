@@ -65,7 +65,7 @@ export interface OrderItemSummary {
   image: string;
 }
 
-export type OrderStatus = 'Order Placed' | 'Confirmed' | 'Processing' | 'Shipped' | 'Delivered';
+export type OrderStatus = 'Order Placed' | 'Confirmed' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
 
 export interface OrderRecord {
   orderReference: string;

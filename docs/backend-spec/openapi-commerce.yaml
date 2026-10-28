@@ -1,0 +1,617 @@
+openapi: 3.1.0
+info:
+  title: TOOO STORE — Commerce API
+  version: 1.0.0
+  description: Authoritative Commerce API for TOOO STORE contemporary fashion platform. Manages product catalog, variant inventory, customer shopping bag, orders, payments, discounts, and store administration.
+  contact:
+    name: TOOO STORE Engineering
+    email: engineering@tooostore.example
+
+servers:
+  - url: /api/v1
+    description: Current Environment Commerce Server
+
+paths:
+  # ---------------------------------------------------------------------------
+  # AUTHENTICATION & CUSTOMER
+  # ---------------------------------------------------------------------------
+  /auth/register:
+    post:
+      summary: Register customer account
+      tags: [Customer Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fullName, email, password, phone]
+              properties:
+                fullName: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                phone: { type: string }
+      responses:
+        '201':
+          description: Customer created successfully
+        '400':
+          $ref: '#/components/responses/ValidationError'
+
+  /auth/login:
+    post:
+      summary: Customer login
+      tags: [Customer Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Logged in successfully; returns access token
+        '401':
+          description: Invalid email or password
+
+  /admin/auth/login:
+    post:
+      summary: Administrative staff login
+      tags: [Admin Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: Admin authenticated; returns access token and permissions
+
+  # ---------------------------------------------------------------------------
+  # PRODUCT CATALOG
+  # ---------------------------------------------------------------------------
+  /products:
+    get:
+      summary: List published products with filters and pagination
+      tags: [Product Catalog]
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: collection
+          in: query
+          schema: { type: string }
+        - name: minPrice
+          in: query
+          schema: { type: integer }
+        - name: maxPrice
+          in: query
+          schema: { type: integer }
+        - name: inStockOnly
+          in: query
+          schema: { type: boolean, default: false }
+        - name: sort
+          in: query
+          schema: { type: string, enum: ['featured', 'newest', 'price:asc', 'price:desc'] }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Paginated product list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductsResponse'
+
+  /products/{slug}:
+    get:
+      summary: Get full product details by URL slug
+      tags: [Product Catalog]
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Complete product details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetailResponse'
+        '404':
+          description: Product not found
+
+  /categories:
+    get:
+      summary: List all catalog categories
+      tags: [Product Catalog]
+      responses:
+        '200':
+          description: Array of categories
+
+  /collections:
+    get:
+      summary: List all active capsule collections
+      tags: [Product Catalog]
+      responses:
+        '200':
+          description: Array of active collections
+
+  # ---------------------------------------------------------------------------
+  # SHOPPING BAG / CART
+  # ---------------------------------------------------------------------------
+  /cart:
+    get:
+      summary: Get current cart with server-validated prices
+      tags: [Shopping Cart]
+      parameters:
+        - name: X-Cart-Session
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Cart details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+
+  /cart/items:
+    post:
+      summary: Add variant to cart with stock validation
+      tags: [Shopping Cart]
+      parameters:
+        - name: X-Cart-Session
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, variantId, quantity]
+              properties:
+                productId: { type: string }
+                variantId: { type: string }
+                quantity: { type: integer, minimum: 1, maximum: 10 }
+      responses:
+        '200':
+          description: Item added to cart
+        '409':
+          description: Insufficient stock available
+
+  /cart/items/{id}:
+    patch:
+      summary: Update cart item quantity
+      tags: [Shopping Cart]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity: { type: integer, minimum: 0, maximum: 10 }
+      responses:
+        '200':
+          description: Quantity updated
+    delete:
+      summary: Remove item from cart
+      tags: [Shopping Cart]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Item removed
+
+  /cart/apply-discount:
+    post:
+      summary: Validate and apply coupon code
+      tags: [Shopping Cart]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        '200':
+          description: Discount applied
+        '400':
+          description: Invalid, expired, or limit exceeded
+
+  # ---------------------------------------------------------------------------
+  # CHECKOUT, ORDERS & WEBHOOKS
+  # ---------------------------------------------------------------------------
+  /checkout/orders:
+    post:
+      summary: Atomically place order, reserve inventory, initialize payment
+      tags: [Checkout & Orders]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaceOrderRequest'
+      responses:
+        '201':
+          description: Order created; returns gateway authorization URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlaceOrderResponse'
+        '409':
+          description: Insufficient stock or concurrency conflict
+
+  /orders/{reference}/track:
+    get:
+      summary: Public order tracking by reference and email
+      tags: [Checkout & Orders]
+      parameters:
+        - name: reference
+          in: path
+          required: true
+          schema: { type: string }
+        - name: email
+          in: query
+          required: true
+          schema: { type: string, format: email }
+      responses:
+        '200':
+          description: Public order timeline status
+
+  /payments/webhooks/paystack:
+    post:
+      summary: Ingest Paystack payment event
+      tags: [Payments & Webhooks]
+      parameters:
+        - name: x-paystack-signature
+          in: header
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200':
+          description: Webhook acknowledged and processed
+        '401':
+          description: Invalid HMAC signature
+
+  # ---------------------------------------------------------------------------
+  # ADMINISTRATIVE CATALOG & INVENTORY MUTATIONS
+  # ---------------------------------------------------------------------------
+  /admin/products:
+    get:
+      summary: List all products including drafts and archived
+      tags: [Admin Products]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Array of admin product records
+    post:
+      summary: Create new product and variants
+      tags: [Admin Products]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductInput'
+      responses:
+        '201':
+          description: Product created
+
+  /admin/products/{id}:
+    put:
+      summary: Update product and preserve variant stocks/SKUs
+      tags: [Admin Products]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductInput'
+      responses:
+        '200':
+          description: Product updated
+
+  /admin/products/{id}/duplicate:
+    post:
+      summary: Duplicate product with distinct slug
+      tags: [Admin Products]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '201':
+          description: Product duplicated
+
+  /admin/inventory/adjust:
+    post:
+      summary: Manually adjust variant inventory and append audit log
+      tags: [Admin Inventory]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, variantId, quantityDelta, reason]
+              properties:
+                productId: { type: string }
+                variantId: { type: string }
+                quantityDelta: { type: integer }
+                reason:
+                  type: string
+                  enum: [Restock, Sale, Manual Adjustment, Return, Damage / Loss, Cancellation]
+      responses:
+        '200':
+          description: Inventory adjusted
+
+  /admin/orders/{id}/cancel:
+    post:
+      summary: Idempotently cancel order and replenish variant inventory
+      tags: [Admin Orders]
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200':
+          description: Order cancelled and stock replenished
+        '400':
+          description: Order already cancelled or delivered
+
+  /admin/storefront/homepage-sections:
+    put:
+      summary: Save dynamic homepage CMS layout configuration
+      tags: [Admin Storefront CMS]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required: [id, enabled]
+                properties:
+                  id: { type: string }
+                  enabled: { type: boolean }
+                  headline: { type: string }
+                  subheadline: { type: string }
+                  ctaText: { type: string }
+                  ctaLink: { type: string }
+      responses:
+        '200':
+          description: Homepage CMS updated
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    ValidationError:
+      description: Invalid request payload
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+
+  schemas:
+    ApiError:
+      type: object
+      required: [success, error]
+      properties:
+        success: { type: boolean, example: false }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, example: "INSUFFICIENT_STOCK" }
+            message: { type: string, example: "Requested quantity exceeds available stock." }
+
+    PaginatedProductsResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductSummary'
+        pagination:
+          type: object
+          properties:
+            page: { type: integer }
+            limit: { type: integer }
+            totalItems: { type: integer }
+            totalPages: { type: integer }
+
+    ProductSummary:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        price: { type: integer }
+        category: { type: string }
+        collection: { type: string }
+        images: { type: array, items: { type: string } }
+        stock: { type: integer }
+
+    ProductDetailResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            id: { type: string }
+            slug: { type: string }
+            name: { type: string }
+            description: { type: string }
+            price: { type: integer }
+            variants:
+              type: array
+              items:
+                type: object
+                properties:
+                  variantId: { type: string }
+                  size: { type: string }
+                  colour: { type: string }
+                  stock: { type: integer }
+                  sku: { type: string }
+
+    CartResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            id: { type: string }
+            subtotal: { type: integer }
+            discountAmount: { type: integer }
+            estimatedTotal: { type: integer }
+            items: { type: array, items: { type: object } }
+
+    PlaceOrderRequest:
+      type: object
+      required: [customerInfo, deliveryAddress, items, paymentMethod]
+      properties:
+        customerInfo:
+          type: object
+          required: [fullName, email, phone]
+          properties:
+            fullName: { type: string }
+            email: { type: string, format: email }
+            phone: { type: string }
+        deliveryAddress:
+          type: object
+          required: [fullName, email, phone, street, city, state]
+          properties:
+            fullName: { type: string }
+            email: { type: string }
+            phone: { type: string }
+            street: { type: string }
+            city: { type: string }
+            state: { type: string }
+            notes: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            required: [productId, variantId, quantity]
+            properties:
+              productId: { type: string }
+              variantId: { type: string }
+              quantity: { type: integer }
+        promoCode: { type: string }
+        paymentMethod: { type: string, enum: [CARD_PAYSTACK, BANK_TRANSFER_NIP, CARD_FLUTTERWAVE] }
+
+    PlaceOrderResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            orderReference: { type: string, example: "TOOO-84920" }
+            total: { type: integer }
+            paymentStatus: { type: string }
+            paymentDetails:
+              type: object
+              properties:
+                authorizationUrl: { type: string, format: uri }
+                reference: { type: string }
+
+    CreateProductInput:
+      type: object
+      required: [name, description, price, category, collection, images, variants]
+      properties:
+        name: { type: string }
+        slug: { type: string }
+        description: { type: string }
+        price: { type: integer }
+        category: { type: string }
+        collection: { type: string }
+        images: { type: array, items: { type: string } }
+        variants:
+          type: array
+          items:
+            type: object
+            required: [size, colour, stock]
+            properties:
+              size: { type: string }
+              colour: { type: string }
+              stock: { type: integer }
+              sku: { type: string }
